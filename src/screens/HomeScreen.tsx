@@ -19,12 +19,14 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
+  query,
+  where,
   updateDoc,
 } from "firebase/firestore";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from "@expo/vector-icons";
 
 type Task = {
   id: string;
@@ -33,6 +35,7 @@ type Task = {
   deadline: string;
   priority: "High" | "Medium" | "Low";
   completed: boolean;
+  userId: string;
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -47,8 +50,14 @@ export default function HomeScreen({ navigation }: Props) {
   const [searchText, setSearchText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Fetch only logged-in user's tasks
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "tasks"), (snapshot) => {
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, "tasks"),
+      where("userId", "==", auth.currentUser.uid)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
       const list: Task[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -67,6 +76,7 @@ export default function HomeScreen({ navigation }: Props) {
       deadline: selectedDate.toISOString().split("T")[0],
       priority,
       completed: false,
+      userId: auth.currentUser?.uid, // 👈 store userId
     });
 
     setTitle("");
@@ -75,7 +85,6 @@ export default function HomeScreen({ navigation }: Props) {
     setSelectedDate(new Date());
     setModalVisible(false);
 
-    // Dismiss keyboard after adding task
     Keyboard.dismiss();
   };
 
@@ -116,9 +125,10 @@ export default function HomeScreen({ navigation }: Props) {
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
   });
 
-  const filteredTasks = sortedTasks.filter((task) =>
-    task.title.toLowerCase().includes(searchText.toLowerCase()) ||
-    task.description.toLowerCase().includes(searchText.toLowerCase())
+  const filteredTasks = sortedTasks.filter(
+    (task) =>
+      task.title.toLowerCase().includes(searchText.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const incompleteTasks = filteredTasks.filter((t) => !t.completed);
@@ -131,7 +141,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Header with + button */}
+      {/* Header */}
       <View style={styles.headerContainer}>
         <Text style={styles.header}>My To-Do List</Text>
         <TouchableOpacity
@@ -142,15 +152,16 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Search filter */}
+      {/* Search */}
       <TextInput
         placeholder="Search tasks..."
+        placeholderTextColor="#888" // 👈 fix dark mode
         value={searchText}
         onChangeText={setSearchText}
         style={styles.input}
       />
 
-      {/* Task Lists */}
+      {/* Incomplete */}
       <Text style={{ fontWeight: "bold", marginTop: 10 }}>Incomplete Tasks</Text>
       <FlatList
         data={incompleteTasks}
@@ -158,14 +169,17 @@ export default function HomeScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingBottom: 80 }}
         renderItem={({ item }) => (
           <View style={styles.taskItem}>
-            <TouchableOpacity onPress={() => toggleComplete(item.id, item.completed)}>
+            <TouchableOpacity
+              onPress={() => toggleComplete(item.id, item.completed)}
+            >
               <Text
                 style={{
                   textDecorationLine: item.completed ? "line-through" : "none",
                   color: getPriorityColor(item.priority),
                 }}
               >
-                {item.title} | {item.description} | {item.deadline} | {item.priority}
+                {item.title} | {item.description} | {item.deadline} |{" "}
+                {item.priority}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDelete(item.id)}>
@@ -175,6 +189,7 @@ export default function HomeScreen({ navigation }: Props) {
         )}
       />
 
+      {/* Completed */}
       <Text style={{ fontWeight: "bold", marginTop: 20 }}>Completed Tasks</Text>
       <FlatList
         data={completedTasks}
@@ -182,14 +197,17 @@ export default function HomeScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingBottom: 80 }}
         renderItem={({ item }) => (
           <View style={styles.taskItem}>
-            <TouchableOpacity onPress={() => toggleComplete(item.id, item.completed)}>
+            <TouchableOpacity
+              onPress={() => toggleComplete(item.id, item.completed)}
+            >
               <Text
                 style={{
                   textDecorationLine: item.completed ? "line-through" : "none",
                   color: getPriorityColor(item.priority),
                 }}
               >
-                {item.title} | {item.description} | {item.deadline} | {item.priority}
+                {item.title} | {item.description} | {item.deadline} |{" "}
+                {item.priority}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDelete(item.id)}>
@@ -201,7 +219,7 @@ export default function HomeScreen({ navigation }: Props) {
 
       <Button title="Logout" onPress={handleLogout} color="red" />
 
-      {/* Modal for Add Task */}
+      {/* Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -215,12 +233,14 @@ export default function HomeScreen({ navigation }: Props) {
 
               <TextInput
                 placeholder="Title"
+                placeholderTextColor="#888" // 👈 fix dark mode
                 value={title}
                 onChangeText={setTitle}
                 style={styles.input}
               />
               <TextInput
                 placeholder="Description"
+                placeholderTextColor="#888" // 👈 fix dark mode
                 value={description}
                 onChangeText={setDescription}
                 style={styles.input}
@@ -228,7 +248,9 @@ export default function HomeScreen({ navigation }: Props) {
 
               <View style={{ marginBottom: 10 }}>
                 <Button
-                  title={`Select Deadline: ${selectedDate.toISOString().split("T")[0]}`}
+                  title={`Select Deadline: ${
+                    selectedDate.toISOString().split("T")[0]
+                  }`}
                   onPress={() => setShowDatePicker(true)}
                 />
                 {showDatePicker && (
@@ -247,7 +269,10 @@ export default function HomeScreen({ navigation }: Props) {
                     key={p}
                     style={[
                       styles.priorityButton,
-                      { backgroundColor: priority === p ? getPriorityColor(p) : "#ccc" },
+                      {
+                        backgroundColor:
+                          priority === p ? getPriorityColor(p) : "#ccc",
+                      },
                     ]}
                     onPress={() => setPriority(p)}
                   >
@@ -259,7 +284,11 @@ export default function HomeScreen({ navigation }: Props) {
               <View style={{ marginTop: 10 }}>
                 <Button title="Add Task" onPress={handleAddTask} color="#007bff" />
                 <View style={{ marginTop: 10 }} />
-                <Button title="Cancel" onPress={() => setModalVisible(false)} color="grey" />
+                <Button
+                  title="Cancel"
+                  onPress={() => setModalVisible(false)}
+                  color="grey"
+                />
               </View>
             </View>
           </View>
@@ -271,7 +300,12 @@ export default function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#f5f5f5" },
-  headerContainer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 15 },
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
   header: { fontSize: 22, fontWeight: "bold" },
   addButton: {
     backgroundColor: "#007bff",
@@ -282,9 +316,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   addButtonText: { color: "white", fontSize: 25, fontWeight: "bold" },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: "#fff" },
-  priorityContainer: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  priorityButton: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 5, marginRight: 10 },
+  input: {
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 5,
+    backgroundColor: "#fff",
+    color: "#000",
+  },
+  priorityContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  priorityButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginRight: 10,
+  },
   priorityButtonText: { color: "white", fontWeight: "bold" },
   taskItem: {
     backgroundColor: "#fff",
@@ -300,6 +350,16 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  modalContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
-  modalContent: { width: "90%", backgroundColor: "white", padding: 20, borderRadius: 10 },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    width: "90%",
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+  },
 });

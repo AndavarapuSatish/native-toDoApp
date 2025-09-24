@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, Alert, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -10,13 +18,22 @@ type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Error", "Please enter both email and password.");
+      return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      setLoading(true);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       navigation.replace("Home");
     } catch (error: any) {
       Alert.alert("Login Error", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,6 +44,7 @@ export default function LoginScreen({ navigation }: Props) {
 
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#888" // ✅ visible in dark mode
         value={email}
         onChangeText={setEmail}
         style={styles.input}
@@ -36,14 +54,23 @@ export default function LoginScreen({ navigation }: Props) {
 
       <TextInput
         placeholder="Password"
+        placeholderTextColor="#888" // ✅ visible in dark mode
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
       />
 
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.loginButtonText}>Login</Text>
+      <TouchableOpacity
+        style={[styles.loginButton, loading && { opacity: 0.7 }]}
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.loginButtonText}>Login</Text>
+        )}
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -83,16 +110,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     fontSize: 16,
+    color: "#000", // ✅ ensures input text is visible on all themes
   },
   loginButton: {
     backgroundColor: "#007bff",
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 15,
+    alignItems: "center",
   },
   loginButtonText: {
     color: "white",
-    textAlign: "center",
     fontSize: 18,
     fontWeight: "bold",
   },
@@ -100,10 +128,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#6c757d",
     paddingVertical: 12,
     borderRadius: 8,
+    alignItems: "center",
   },
   registerButtonText: {
     color: "white",
-    textAlign: "center",
     fontSize: 16,
   },
 });

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Alert, StyleSheet, TouchableOpacity } from "react-native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig"; // make sure db = getFirestore(app)
+import { doc, setDoc } from "firebase/firestore";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 
@@ -13,7 +14,16 @@ export default function RegisterScreen({ navigation }: Props) {
 
   const handleRegister = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Create a Firestore user document
+      await setDoc(doc(db, "users", user.uid), {
+        email: user.email,
+        createdAt: new Date(),
+        tasks: [], // keep tasks separated for each user
+      });
+
       Alert.alert("Success", "Account created successfully!");
       navigation.replace("Home");
     } catch (error: any) {
@@ -28,6 +38,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#999" // ✅ visible in dark mode
         value={email}
         onChangeText={setEmail}
         style={styles.input}
@@ -37,6 +48,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
       <TextInput
         placeholder="Password"
+        placeholderTextColor="#999" // ✅ visible in dark mode
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -84,9 +96,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     fontSize: 16,
+    color: "#000", // ✅ ensures text is visible in dark mode
   },
   registerButton: {
-    backgroundColor: "#28a745", // green
+    backgroundColor: "#28a745",
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 15,
@@ -98,7 +111,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   loginButton: {
-    backgroundColor: "#6c757d", // gray
+    backgroundColor: "#6c757d",
     paddingVertical: 12,
     borderRadius: 8,
   },
